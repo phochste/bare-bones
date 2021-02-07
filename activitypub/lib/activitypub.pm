@@ -1,102 +1,61 @@
-package activitypub;
-use Dancer ':syntax';
-use Path::Tiny;
+package ActivityPub;
+use Moo;
+use Crypt::OpenSSL::Random;
+use Crypt::OpenSSL::RSA;
+use Digest::SHA qw(sha256_base64);
+use HTTP::Date;
+use LWP::UserAgent;
+use MIME::Base64;
+use POSIX qw(strftime);
 
-our $VERSION = '0.1';
-our $BASE_DOMAIN      = "cubanbar.hochstenbach.net";
-our $MYSELF_PREF_NAME = "fidel";
-our $MYSELF           = "acct:$MYSELF_PREF_NAME\@$BASE_DOMAIN";
-our $PRIVATE_PEM      = "keys/private.pem";
-our $PUBLIC_PEM       = "keys/public.pem";
+sub date_http {
+    HTTP::Date::time2str(time);
+}
 
-# Webfinger is how we are going to learn where we find information about
-# MYSELF@my-eexample.com
-get '/.well-known/webfinger' => sub {
-    my $resource = params->{resource};
+sub date_iso {
+    strftime("%Y-%m-%dT%H:%M:%SZ",gmtime(time));
+}
 
-    # We need a resource
-    unless ($resource) {
-        status 'not_found';
-        return 'Need a resource';
-    }
+sub sign {
+    my ($self, $keyId, $inbox, $host, $date, $digest, $privkey) = @_;
 
-    # We only know MYSELF...
-    unless ($resource eq $MYSELF) {
-        status 'not_found';
-        return 'No such user';
-    }
+    my $rsa_priv = Crypt::OpenSSL::RSA->new_private_key($privkey);
 
-    # Static response for MYSELF
-    # Content type for webfinger is application/jrd+json
-    content_type 'application/jrd+json';
-    return to_json {
-        subject => $MYSELF ,
-        links   => [{
-            rel   => "self" ,
-            type  => "application/activity+json" ,
-            href  => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME"
-        }]
-    };
-};
+    $rsa_priv->use_sha256_hash();
 
-# Actor is an ActivityPub message to learn more about MYSELF (name,inbox,outbox...)
-get '/actor/:name' => sub {
-    my $actor = param('name');
+    my $signed_string = "(request-target): post $inbox\nhost: $host\ndate: $date\ndigest: $digest";
+    my $signature     = encode_base64($rsa_priv->sign($signed_string),'');
+    my $header        = "keyId=\"$keyId\",algoritm=\"rsa-sha256\"," .
+                        "headers=\"(request-target) host date digest\"," .
+                        "signature=\"$signature\"";
 
-    # We only know MYSELF
-    unless ($actor && $actor eq $MYSELF_PREF_NAME) {
-        status 'not_found';
-        return 'No such user';
-    }
+    $header;
+}
 
-    my $pubkey = path($PUBLIC_PEM)->slurp;
+sub digest {
+    my ($self, $body) = @_;
 
-    # Return an ActivityStream document about MYSELF
-    content_type 'application/activity+json';
+    my $digest = "sha-256=" . sha256_base64($body) . '=';
 
-    return to_json {
-        '@context'          => [
-              "https://www.w3.org/ns/activitystreams",
-		          "https://w3id.org/security/v1"
-        ] ,
-        id                  => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME" ,
-        type                => "Person",
-        preferredUsername   => $MYSELF_PREF_NAME ,
-        inbox               => "https://$BASE_DOMAIN/inbox/$MYSELF_PREF_NAME" ,
-        publicKey           => {
-            id           => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME#main-key" ,
-            owner        => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME" ,
-            publicKeyPem => $pubkey
-        }
-    }
-};
+    $digest;
+}
 
-# Store all inbox requests...
-post '/actor/:name/inbox' => sub {
-    my $actor = param('name');
+sub send {
+    my ($self, $host, $inbox, $date, $digest, $signature, $body) = @_;
 
-    # We only know MYSELF
-    unless ($actor && $actor eq $MYSELF_PREF_NAME) {
-        status 'not_found';
-        return 'No such user';
-    }
+    my $ua     = new LWP::UserAgent;
+    my $agent  = "MyAgent/0.1 " . $ua->agent;
+    my $req = HTTP::Request->new( 'POST', "https://$host$inbox" );
+    $req->header('Host'      , $host);
+    $req->header('Date'      , $date);
+    $req->header('Digest'    , $digest);
+    $req->header('Signature' , $signature);
+    $req->header('Accept', 'application/activity+json');
+    $req->content($body);
 
-    my $body    = request->body;
-    my $ipaddr  = request->remote_address;
-    my $headers = request->headers->as_string;
-    my $time    = time;
+    my $res = $ua->request( $req );
 
-    path("data/$ipaddr-$time")->spew_utf8(
-      to_json({
-        "body"     => $body ,
-        "ipaddr"   => $ipaddr ,
-        "headers"  => $headers
-      }, {allow_blessed => 1})
-    );
+    $res;
+}
 
-    status 'accepted';
-
-    return "";
-};
-
-true;
+1;

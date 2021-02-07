@@ -3,4 +3,6 @@ requires 'Dancer',0;
 requires 'JSON',0;
 requires 'YAML',0;
 requires 'Path::Tiny',0;
+requires 'Moo',0;
+requires 'LWP::UserAgent',0;
 requires 'Crypt::OpenSSL::RSA',0;
