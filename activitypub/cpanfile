@@ -6,3 +6,4 @@ requires 'Path::Tiny',0;
 requires 'Moo',0;
 requires 'LWP::UserAgent',0;
 requires 'Crypt::OpenSSL::RSA',0;
+requires 'LWP::Protocol::https',0;

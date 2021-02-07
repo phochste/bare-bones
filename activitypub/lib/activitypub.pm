@@ -13,7 +13,7 @@ has 'agent' => (is => 'lazy');
 sub _build_agent {
     my $ua     = new LWP::UserAgent;
     my $agent  = "MyAgent/0.1 " . $ua->agent;
-    $agent;
+    $ua;
 }
 
 sub date_http {
