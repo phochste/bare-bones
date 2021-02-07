@@ -2,3 +2,4 @@ requires 'perl', '>= 5.10.1';
 requires 'Dancer',0;
 requires 'YAML',0;
 requires 'Path::Tiny',0;
+requires 'Crypt::OpenSSL::RSA',0;

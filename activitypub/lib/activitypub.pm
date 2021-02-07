@@ -50,7 +50,6 @@ get '/actor/:name' => sub {
     }
 
     my $pubkey = path($PUBLIC_PEM)->slurp;
-    $pubkey    =~ s{\n}{\\n}mg;
 
     # Return an ActivityStream document about MYSELF
     content_type 'application/activity+json';
@@ -64,12 +63,40 @@ get '/actor/:name' => sub {
         type                => "Person",
         preferredUsername   => $MYSELF_PREF_NAME ,
         inbox               => "https://$BASE_DOMAIN/inbox/$MYSELF_PREF_NAME" ,
-        pubkey              => {
+        publicKey           => {
             id           => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME#main-key" ,
             owner        => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME" ,
             publicKeyPem => $pubkey
         }
     }
+};
+
+# Store all inbox requests...
+post '/actor/:name/inbox' => sub {
+    my $actor = param('name');
+
+    # We only know MYSELF
+    unless ($actor && $actor eq $MYSELF_PREF_NAME) {
+        status 'not_found';
+        return 'No such user';
+    }
+
+    my $body    = request->body;
+    my $ipaddr  = request->remote_address;
+    my $headers = request->headers->as_string;
+    my $time    = time;
+
+    path("data/$ipaddr-$time")->spew_utf8(
+      to_json({
+        "body"     => $body ,
+        "ipaddr"   => $ipaddr ,
+        "headers"  => $headers
+      }, {allow_blessed => 1})
+    );
+
+    status 'accepted';
+
+    return "";
 };
 
 true;
