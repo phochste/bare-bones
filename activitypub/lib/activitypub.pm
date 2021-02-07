@@ -8,6 +8,14 @@ use LWP::UserAgent;
 use MIME::Base64;
 use POSIX qw(strftime);
 
+has 'agent' => (is => 'lazy');
+
+sub _build_agent {
+    my $ua     = new LWP::UserAgent;
+    my $agent  = "MyAgent/0.1 " . $ua->agent;
+    $agent;
+}
+
 sub date_http {
     HTTP::Date::time2str(time);
 }
@@ -43,17 +51,17 @@ sub digest {
 sub send {
     my ($self, $host, $inbox, $date, $digest, $signature, $body) = @_;
 
-    my $ua     = new LWP::UserAgent;
-    my $agent  = "MyAgent/0.1 " . $ua->agent;
+    my $agent = $self->agent;
+
     my $req = HTTP::Request->new( 'POST', "https://$host$inbox" );
     $req->header('Host'      , $host);
     $req->header('Date'      , $date);
     $req->header('Digest'    , $digest);
     $req->header('Signature' , $signature);
-    $req->header('Accept', 'application/activity+json');
+    $req->header('Accept',   'application/activity+json');
     $req->content($body);
 
-    my $res = $ua->request( $req );
+    my $res = $agent->request( $req );
 
     $res;
 }
