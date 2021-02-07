@@ -2,6 +2,7 @@
 
 use lib qw(./lib);
 use ActivityPub;
+use ActivityPub::Reply;
 use Path::Tiny;
 use Getopt::Long;
 use Data::Dumper;
@@ -28,50 +29,22 @@ unless ($replyId && $content) {
     exit(1);
 }
 
-my $activity    = ActivityPub->new;
-my $privkey     = path($key_file)->slurp;
-my $person      = "$base/actor/$actor";
-my $version     = sprintf "%d-%d" , time , int(rand(999));
-my $date_http   = $activity->date_http;
-my $date_str    = $activity->date_iso;
-
-my $body          =<<EOF;
-{
-	"\@context": "https://www.w3.org/ns/activitystreams",
-
-	"id": "$base/create-hello-world-$version",
-	"type": "Create",
-	"actor": "$base/actor/$actor",
-
-	"object": {
-		"id": "$base/hello-world-$version",
-		"type": "Note",
-		"published": "$date_str",
-		"attributedTo": "$person",
-		"inReplyTo": "$replyId",
-		"content": "$content",
-		"to": "https://www.w3.org/ns/activitystreams#Public"
-	}
-}
-EOF
-
-my $digest    = $activity->digest($body);
-my $signature = $activity->sign(
-      "$person#main-key" ,
-      "/inbox" ,
-      $host ,
-      $date_http ,
-      $digest ,
-      $privkey
+my $activity    = ActivityPub->new(
+    privkey => path($key_file)->slurp
 );
 
-my $res = $activity->send(
+my $person = "$base/actor/$actor";
+my $res    = $activity->send(
       $host ,
       "/inbox" ,
-      $date_http ,
-      $digest ,
-      $signature ,
-      $body
+      $person ,
+      ActivityPub::Reply->new->body(
+          $activity ,
+          "$base/note",
+          $person ,
+          $replyId ,
+          $content
+      )
 );
 
 if ($res->code eq '202') {

@@ -8,7 +8,8 @@ use LWP::UserAgent;
 use MIME::Base64;
 use POSIX qw(strftime);
 
-has 'agent' => (is => 'lazy');
+has 'agent'   => (is => 'lazy');
+has 'privkey' => (is => 'ro', required => 1);
 
 sub _build_agent {
     my $ua     = new LWP::UserAgent;
@@ -25,9 +26,9 @@ sub date_iso {
 }
 
 sub sign {
-    my ($self, $keyId, $inbox, $host, $date, $digest, $privkey) = @_;
+    my ($self, $keyId, $inbox, $host, $date, $digest) = @_;
 
-    my $rsa_priv = Crypt::OpenSSL::RSA->new_private_key($privkey);
+    my $rsa_priv = Crypt::OpenSSL::RSA->new_private_key($self->privkey);
 
     $rsa_priv->use_sha256_hash();
 
@@ -49,9 +50,12 @@ sub digest {
 }
 
 sub send {
-    my ($self, $host, $inbox, $date, $digest, $signature, $body) = @_;
+    my ($self, $host, $inbox, $person, $body) = @_;
 
-    my $agent = $self->agent;
+    my $date      = $self->date_http;
+    my $digest    = $self->digest($body);
+    my $signature = $self->sign("$person#main-key",$inbox,$host,$date,$digest);
+    my $agent     = $self->agent;
 
     my $req = HTTP::Request->new( 'POST', "https://$host$inbox" );
     $req->header('Host'      , $host);
