@@ -415,6 +415,14 @@ DISTRIBUTIONS
       Exporter 5.57
       ExtUtils::MakeMaker 0
       perl 5.008
+  JSON-4.03
+    pathname: I/IS/ISHIGAKI/JSON-4.03.tar.gz
+    provides:
+      JSON 4.03
+      JSON::Backend::PP 4.03
+    requirements:
+      ExtUtils::MakeMaker 0
+      Test::More 0
   LWP-MediaTypes-6.04
     pathname: O/OA/OALDERS/LWP-MediaTypes-6.04.tar.gz
     provides:
