@@ -1,3 +1,13 @@
+.SUFFIXES:
+
+.PHONY: genkey
+
+usage:
+	@echo "usage: make TARGET"
+	@echo
+	@echo "targets:"
+	@echo "  genkey"
+
 genkey: keys/private.pem keys/public.pem
 
 keys/private.pem:

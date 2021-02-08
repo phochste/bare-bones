@@ -1,0 +1,14 @@
+---
+base_domain: cubanbar.hochstenbach.net
+myself_pref_name: fidel
+myself: acct:fidel@cubanbar.hochstenbach.net
+keys:
+  private: keys/private.pem
+  public: keys/public.pem
+page_size: 10
+store:
+  followers:
+    package: DBI
+    options:
+      data_source: dbi:SQLite:data/followers.sqlite
+...
