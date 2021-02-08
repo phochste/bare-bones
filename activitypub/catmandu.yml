@@ -11,4 +11,8 @@ store:
     package: DBI
     options:
       data_source: dbi:SQLite:data/followers.sqlite
+  following:
+    package: DBI
+    options:
+      data_source: dbi:SQLite:data/following.sqlite
 ...
