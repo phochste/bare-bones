@@ -1,6 +1,7 @@
 package appserver;
 use Dancer ':syntax';
 use Path::Tiny;
+use ActivityPub;
 use Catmandu;
 use Catmandu::Sane;
 
@@ -11,6 +12,12 @@ our $MYSELF           = Catmandu->config->{myself};
 our $PRIVATE_PEM      = Catmandu->config->{keys}->{private};
 our $PUBLIC_PEM       = Catmandu->config->{keys}->{public};
 our $PAGE_SIZE        = Catmandu->config->{page_size};
+
+sub activitypub {
+    state $pub = ActivityPub->new(
+        privkey => path($PRIVATE_PEM)->slurp
+    );
+}
 
 # Webfinger is how we are going to learn where we find information about
 # MYSELF@my-eexample.com
@@ -87,22 +94,26 @@ post '/actor/:name/inbox' => sub {
         return 'No such user';
     }
 
-    my $body    = request->body;
-    my $ipaddr  = request->remote_address;
-    my $headers = request->headers->as_string;
-    my $time    = time;
+    my $body  = from_json(request->body);
 
-    path("data/$ipaddr-$time")->spew_utf8(
-      to_json({
-        "body"     => $body ,
-        "ipaddr"   => $ipaddr ,
-        "headers"  => $headers
-      }, {allow_blessed => 1})
+    my $valid = activitypub()->verify(
+        "/actor/$actor/inbox" ,
+        request->headers()
     );
 
-    status 'accepted';
+    unless ($valid) {
+        status 'unauthorized';
 
-    return "";
+        return "Request signature could not be verified";
+    }
+
+    my $bag = Catmandu->store('inbox')->bag;
+
+    $bag->add($body);
+
+    status 'ok';
+
+    return "OK";
 };
 
 # Show a list of followers...

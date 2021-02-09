@@ -15,4 +15,8 @@ store:
     package: DBI
     options:
       data_source: dbi:SQLite:data/following.sqlite
+  inbox:
+    package: DBI
+    options:
+      data_source: dbi:SQLite:data/inbox.sqlite
 ...

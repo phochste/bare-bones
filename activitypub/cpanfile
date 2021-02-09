@@ -11,4 +11,5 @@ requires 'LWP::Protocol::https',0;
 requires 'LWP::UserAgent',0;
 requires 'Moo',0;
 requires 'Path::Tiny',0;
+requires 'Plack',0;
 requires 'YAML',0;
