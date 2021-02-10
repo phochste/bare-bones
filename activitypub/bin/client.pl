@@ -54,7 +54,22 @@ sub do_follow {
           object => $id
     );
 
-    print $follow->as_json;
+    my $res    = $activity->send(
+          $host ,
+          "/inbox" ,
+          $person ,
+          $follow
+    );
+
+    if ($res->code eq '202') {
+        printf STDERR "Succes : %s : %s : %s\n" , $res->code , $res->message , $res->decoded_content;
+    }
+    else {
+        printf STDERR "Failed : %s : %s : %s\n" , $res->code , $res->message , $res->decoded_content;
+    }
+
+    my $bag = Catmandu->store('following')->bag;
+    $bag->add({ _id => $id});
 
     exit (0);
 }
