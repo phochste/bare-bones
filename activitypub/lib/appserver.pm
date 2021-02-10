@@ -1,13 +1,23 @@
 package appserver;
 use Dancer ':syntax';
 use Path::Tiny;
+use ActivityPub;
+use Catmandu;
+use Catmandu::Sane;
 
 our $VERSION = '0.1';
-our $BASE_DOMAIN      = "cubanbar.hochstenbach.net";
-our $MYSELF_PREF_NAME = "fidel";
-our $MYSELF           = "acct:$MYSELF_PREF_NAME\@$BASE_DOMAIN";
-our $PRIVATE_PEM      = "keys/private.pem";
-our $PUBLIC_PEM       = "keys/public.pem";
+our $BASE_DOMAIN      = Catmandu->config->{base_domain};
+our $MYSELF_PREF_NAME = Catmandu->config->{myself_pref_name};
+our $MYSELF           = Catmandu->config->{myself};
+our $PRIVATE_PEM      = Catmandu->config->{keys}->{private};
+our $PUBLIC_PEM       = Catmandu->config->{keys}->{public};
+our $PAGE_SIZE        = Catmandu->config->{page_size};
+
+sub activitypub {
+    state $pub = ActivityPub->new(
+        privkey => path($PRIVATE_PEM)->slurp
+    );
+}
 
 # Webfinger is how we are going to learn where we find information about
 # MYSELF@my-eexample.com
@@ -29,6 +39,7 @@ get '/.well-known/webfinger' => sub {
     # Static response for MYSELF
     # Content type for webfinger is application/jrd+json
     content_type 'application/jrd+json';
+
     return to_json {
         subject => $MYSELF ,
         links   => [{
@@ -63,6 +74,8 @@ get '/actor/:name' => sub {
         type                => "Person",
         preferredUsername   => $MYSELF_PREF_NAME ,
         inbox               => "https://$BASE_DOMAIN/inbox/$MYSELF_PREF_NAME" ,
+        following           => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME/following" ,
+        followers           => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME/followers" ,
         publicKey           => {
             id           => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME#main-key" ,
             owner        => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME" ,
@@ -81,22 +94,82 @@ post '/actor/:name/inbox' => sub {
         return 'No such user';
     }
 
-    my $body    = request->body;
-    my $ipaddr  = request->remote_address;
-    my $headers = request->headers->as_string;
-    my $time    = time;
+    my $body  = from_json(request->body);
 
-    path("data/$ipaddr-$time")->spew_utf8(
-      to_json({
-        "body"     => $body ,
-        "ipaddr"   => $ipaddr ,
-        "headers"  => $headers
-      }, {allow_blessed => 1})
+    my $valid = activitypub()->verify(
+        "/actor/$actor/inbox" ,
+        request->headers()
     );
 
-    status 'accepted';
+    unless ($valid) {
+        status 'unauthorized';
 
-    return "";
+        return "Request signature could not be verified";
+    }
+
+    my $bag = Catmandu->store('inbox')->bag;
+
+    $bag->add($body);
+
+    status 'ok';
+
+    return "OK";
+};
+
+# Show a list of followers...
+get qr{/actor/(\w+)/(followers|following)} => sub {
+    my ($actor,$follower_or_following) = splat;
+    my $page  = params->{page};
+
+    # We only know MYSELF
+    unless ($actor && $actor eq $MYSELF_PREF_NAME) {
+        status 'not_found';
+        return 'No such user';
+    }
+
+    my $bag   = Catmandu->store($follower_or_following)->bag;
+    my $count = $bag->count;
+
+    my $response = {
+       "\@context"   => "https://www.w3.org/ns/activitystreams",
+       "totalItems"  => $count,
+       "id"          => "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME/$follower_or_following",
+       "type"        => "OrderedCollection",
+    };
+
+    if ($page && $page =~ /^\d+/) {
+        my $items   = [];
+
+        $bag->slice($page * $PAGE_SIZE, $PAGE_SIZE)->each(sub {
+            push @$items , $_[0]->{_id};
+        });
+
+        $response->{"id"}          .= "?page=$page";
+        $response->{"type"}         = "OrderedCollectionPage";
+        $response->{"orderedItems"} = $items;
+        $response->{"partOf"}       = "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME/$follower_or_following";
+
+        if (($page + 1) * $PAGE_SIZE < $count ) {
+            $response->{"next"} = "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME/$follower_or_following?page=" . ($page+1);
+        }
+        else {
+            # we are on the last page...
+        }
+    }
+    else {
+        $response->{"type"}  = "OrderedCollection";
+        if ($count) {
+            $response->{"first"} = "https://$BASE_DOMAIN/actor/$MYSELF_PREF_NAME/$follower_or_following?page=1";
+        }
+        else {
+            # no followers...
+        }
+    }
+
+    # Return an ActivityStream document listing the followers
+    content_type 'application/activity+json';
+
+    return to_json $response;
 };
 
 true;
