@@ -1,5 +1,9 @@
 package ActivityPub;
 use Moo;
+use ActivityPub::Object;
+use ActivityPub::Note;
+use ActivityPub::Follow;
+use ActivityPub::Create;
 use Crypt::OpenSSL::Random;
 use Crypt::OpenSSL::RSA;
 use Digest::SHA qw(sha256_base64);
@@ -12,6 +16,7 @@ use POSIX qw(strftime);
 has 'agent'   => (is => 'lazy');
 has 'scheme'  => (is => 'ro', default => sub { 'https' });
 has 'privkey' => (is => 'ro', required => 1);
+has 'person'  => (is => 'ro');
 
 sub _build_agent {
     my $ua     = new LWP::UserAgent;
@@ -25,6 +30,21 @@ sub date_http {
 
 sub date_iso {
     strftime("%Y-%m-%dT%H:%M:%SZ",gmtime(time));
+}
+
+sub note {
+    my $self = shift;
+    ActivityPub::Note->new(activity => $self , base => $self->person);
+}
+
+sub create {
+    my $self = shift;
+    ActivityPub::Create->new(activity => $self , base => $self->person);
+}
+
+sub follow {
+    my $self = shift;
+    ActivityPub::Follow->new(activity => $self , base => $self->person);
 }
 
 sub sign {
@@ -53,6 +73,8 @@ sub digest {
 
 sub send {
     my ($self, $host, $inbox, $person, $body) = @_;
+
+    $body = $body->as_json if (ref($body) =~ /^ActivityPub::/);
 
     my $date      = $self->date_http;
     my $digest    = $self->digest($body);
@@ -146,6 +168,7 @@ sub verify {
     # - check for the existence of a Digest header
     # - check if the Date header is not to far in the past (against relay attacks)
     # - check if the attribution and the actor are the same in the request and body
+    # See also: https://blog.joinmastodon.org/2018/07/how-to-make-friends-and-verify-requests/
 }
 
 1;
