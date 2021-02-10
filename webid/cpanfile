@@ -1,0 +1,9 @@
+requires 'perl', '>= 5.10.1';
+
+requires 'Dancer',0;
+requires 'Plack',0;
+requires 'Attean',0;
+requires 'AtteanX::Parser::JSONLD',0;
+requires 'YAML',0;
+requires 'JSON',0;
+requires 'Plack',0;

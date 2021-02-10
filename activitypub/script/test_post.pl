@@ -10,12 +10,12 @@ use Data::Dumper;
 Catmandu->load(".");
 
 my $pub = ActivityPub->new(
-   scheme  => 'http',
+   scheme  => 'https',
    privkey => path(Catmandu->config->{keys}->{private})->slurp
 );
 
 $pub->send(
-    'localhost:3000',
+    'locahost:3000',
     '/actor/fidel/inbox',
     'https://cubanbar.hochstenbach.net/actor/fidel',
     encode_json({
